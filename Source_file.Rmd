@@ -1,0 +1,293 @@
+---
+title: "Source File"
+author: "Anish K. and Albert(Xianzhi) W."
+date: "04/06/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(mosaic)
+require(leaps)
+require(effects)
+require(stargazer)
+```
+
+Read Data In
+```{r}
+credit <- read.csv('Credit.csv')
+names(credit)
+```
+
+Averages - Summary Stats
+```{r}
+summary(credit)
+```
+
+Remove Zero Balance
+```{r}
+credit2 <- credit[-which(credit$Balance == 0),]
+```
+Data of Income, Limit, Rating, Cards, Age, Education, Gender, Student, Married, Ethnicity, and Balance are obtained from a data sharing site called Moodle. The data frame is saved in a .csv file. Each variable is either binary or quantitative. For example, the predictor called "Student" is binary, which means there are only two values, "Yes," or "No." An example of quantitative predictor is "Age," which has values expressed as natural numbers. The response variable which we are investigating is "balance," which is a number that expresses the average credit card balance in dollars. Thus, a positive number for "balance," means the person is carrying a credit card debt, and the relationship between this credit card debt and other predictors is what we are investigating. 
+
+Identifying and removing an outlier from Balance 
+```{r}
+boxplot(credit2$Balance)
+outliers <- boxplot(credit2$Balance, plot=FALSE)$out
+z <- credit2
+z <- z[-which(z$Balance %in% outliers),]
+boxplot(z$Balance)
+```
+
+Then try simple linear regression for all the explanatory variables, fitting Balance with each and every one of them. 
+```{r echo=FALSE}
+income.lm<-lm(Balance~Income, data = z)
+summary(income.lm)
+plot(z$Income,z$Balance, main="Scatterplot of Balance vs. Income")
+abline(income.lm)
+limit.lm<- lm(Balance~Limit, data=z)
+summary(limit.lm)
+plot(z$Limit,z$Balance, main="Scatterplot of Balance vs. Limit")
+abline(limit.lm)
+rating.lm<-lm(Balance~Rating, data=z)
+summary(rating.lm)
+plot(z$Rating,z$Balance, main="Scatterplot of Balance vs. Rating")
+abline(rating.lm)
+cards.lm<- lm(Balance~Cards, data=z)
+summary(cards.lm)
+plot(z$Cards,z$Balance, main="Scatterplot of Balance vs. Cards")
+abline(cards.lm)
+age.lm<- lm(Balance~Age, data=z)
+summary(age.lm)
+plot(z$Age,z$Balance, main="Scatterplot of Balance vs. Age")
+abline(age.lm)
+education.lm<- lm(Balance~Education, data=z)
+summary(education.lm)
+plot(z$Education,z$Balance, main="Scatterplot of Balance vs. Education")
+abline(education.lm)
+gender.lm<-lm(Balance~Gender, data=z)
+summary(gender.lm)
+student.lm<- lm(Balance~Student, data=z)
+summary(student.lm)
+married.lm<- lm(Balance~Married, data = z)
+summary(married.lm)
+ethnicity.lm<- lm(Balance~Ethnicity, data=z)
+summary(ethnicity.lm)
+```
+
+We then used forward stepwise regression first.
+```{r echo=FALSE }
+step.model1<- step(lm(Balance~1, data=credit),
+                   scope = ~Income+Limit+Rating+Cards+Age+Education+Gender+Student+Married+Ethnicity, direction = "forward")
+```
+After going through the list of potential models, the best model available so far is Balance~ Rating + Income + Student + Limit + Cards + Age, which has the lowest AIC= 3679.89.
+
+We also used a backward stepwise regression.
+```{r  echo=FALSE}
+full.model=lm(Balance~Income+Limit+Rating+Cards+Age+Education+Gender+Student+Married+Ethnicity, data = credit)
+step.model2<- step(full.model)
+summary(step.model2)
+```
+Again, the best model is Balance=-493.73419 -7.79508Income +  0.19369Limit + 1.09119Rating + 18.21190Cards + -0.62406Age + 425.60994StudentYes+ error term, with the lowest AIC= 3679.89. This agrees with the forward stepwise regression.
+
+
+
+Finally using the best subsets technique.
+
+```{r}
+full.data = cbind(z$Income, z$Limit, z$Cards, z$Age, z$Education, z$Gender, z$Student,
+                  z$Married, z$Ethnicity, z$Rating)
+best.lm <- leaps(full.data, z$Balance, method = 'adjr2', 
+                names=c('Income', 'Limit', 'Cards', 'Age', 'Education',
+                        'Gender', 'Student', 'Married', 'Ethnicity', 'Rating'), nbest = 1)
+data1 <- cbind(best.lm$which, best.lm$adjr2)
+data1 
+```
+
+Best model is using 7 predictors : Income, Limit, Cards, Age, Student, Ethnicity, Married and Rating
+However, we are using just 3 and proceeding from there to obtain the best model
+
+```{r}
+lmfinal <- lm(Balance~Income+Limit+Student, data=z)
+summary(lmfinal)
+```
+
+
+Starting to check for assumptions in the 3 predictor model
+1. Order plot: Assumption of independent error terms is preserved from order plot 
+```{r}
+z$order = seq(nrow(z))
+ggplot(z, mapping = aes(x = order, y = lmfinal$residuals)) + geom_point() +
+  geom_hline(yintercept=0)
+```
+
+2. Plots with explanatory variables : Shows assumption of independent explanatory variables and residuals is preserved
+```{r}
+par(mfrow=c(2, 2))
+par(mfg=c(1,1))
+plot(lmfinal$residuals ~ z$Income, main='Residuals versus Income', xlab = 'Sqrt Income', ylab = 'Residuals')
+abline(h = 0, col = 2)
+
+par(mfg=c(2,1))
+plot(lmfinal$residuals ~ z$Limit, main='Residuals versus Credit Limit', xlab = 'Sqrt Credit Limit', ylab = 'Residuals')
+abline(h = 0, col = 2)
+
+par(mfg=c(1,2))
+plot(lmfinal$residuals ~ z$Student, main='Residuals versus Student', pch = 15, xlab = 'Student', col=c('blue', 'red')[z$Student], ylab = 'Residuals')
+
+```
+
+
+
+3. Residuals vs Fitted shows assumption of constant variance/homoskedasticity is preserved
+```{r}
+ggplot(z, aes(x=lmfinal$fitted.values, y=lmfinal$residuals)) + geom_point() +
+  geom_hline(aes(yintercept = 0)) + labs(x = "FittedValuesRegfinal", y= "ResidualsRegfinal")
+```
+
+4. Normality assumption, error terms are normally distributed as shown by most points
+being on the normal probability line, some discrepancy in the tail
+```{r}
+ggplot(z, aes(sample=lmfinal$residual)) + stat_qq() + stat_qqline()
+```
+
+
+Statistical Inference
+
+First start of with confidence intervals for the regression, now we can calculate the t-test for significant difference in means for the two Student groups. We first use the f to determine if there is a significant difference in variances between the two groups. After conducting the test we see that there isn't a significant difference since we can't reject the null with a p-value of 0.0359, and so we have to use Welch's t-test assuming variances aren't equal to finally obtain the t-test for the Student variable. The two sample t-test with a small p-value means that we can reject the null that the means of Balances between the non-student and student group is equal, and we accept that they differ from -8.39 to -1.49 at least. 
+```{r}
+confint(lmfinal)
+var.test(Balance~Student, data=z)
+t.test(Balance~Student, data=z, alternative = "two.sided", var.equal = FALSE)
+```
+
+Defining the full model
+```{r}
+lmfull <- lm(Balance~Income+Limit+Student+Cards+Age+
+             Education+Gender+Married+Ethnicity+Rating, data=z)
+summary(lmfull)
+```
+
+
+
+Now we do nested F to check for significance of omitted variables, nested F gives a significant p-value that allows us to reject the null, so we can include more variables
+```{r}
+anova(lmfinal, lmfull)
+```
+
+We continue the anova process for the 4 predictor model and see again that the p-value is significant and we can add predictors.
+```{r}
+lmfinal1 <- lm(Balance~Income+Limit+Student+Cards, data=z)
+anova(lmfinal1, lmfull)
+```
+
+We define a 5 predictor model using the best subsets 5 predictors.
+```{r}
+lmfin <- lm(Balance~Income+Limit+Cards+Age+Student, data=z)
+summary(lmfin)
+```
+
+We continue the anova process now for the 5 predictor model, but now the p-value is actually not significant.
+```{r}
+anova(lmfin, lmfull)
+```
+Therefore we should use model with 5 predictors. 
+
+Now we can check for multicollinearity
+```{r}
+pairs(z[c(9, 2, 3, 5, 6)], pch=16)
+```
+
+Transform Student into Numeric using mapping function lapply and then create a correlation table
+```{r}
+z$Studentn = as.numeric(z$Student)
+cor(z[,c(14, 2, 3, 5, 6)])
+```
+
+Now you can see, multicollinearity between transLimit and transIncome, not that big but we can try and solve it:
+
+By eliminating the variable doesn't help as it reduces R^2, so we keep it regardless...
+```{r}
+lmtry <- lm(Balance~Limit+Cards+Age+Student, data=z)
+summary(lmtry)
+```
+
+Combination also ends up reducing explanatory power and R^2
+```{r}
+z$comb <- z$Income + z$Limit
+lmtry <- lm(Balance~comb+Cards+Age+Student, data=z)
+summary(lmtry)
+```
+
+Conclusion is we leave both predictors in.
+
+Starting to check for OLS assumptions in the 5 predictor model
+1. Order plot: Assumption of independent error terms is preserved from order plot 
+```{r}
+ggplot(z, mapping = aes(x = order, y = lmfin$residuals)) + geom_point() + geom_hline(yintercept = 0)
+```
+
+2. Plots with explanatory variables : Shows assumption of independent explanatory variables and residuals is preserved
+```{r}
+par(mfrow=c(3, 2))
+par(mfg=c(1,1))
+plot(lmfin$residuals ~ z$Income, main='Residuals versus Income', xlab = 'Income', ylab = 'Residuals')
+abline(h = 0, col = 2)
+
+par(mfg=c(2,1))
+plot(lmfin$residuals ~ z$Limit, main='Residuals versus Credit Limit', xlab = 'Credit Limit', ylab = 'Residuals')
+abline(h = 0, col = 2)
+
+par(mfg=c(3,1))
+plot(lmfin$residuals ~ z$Student, main='Residuals versus Student', pch = 15, xlab = 'Student', col=c('blue', 'red')[z$Student], ylab = 'Residuals')
+
+par(mfg=c(1,2))
+plot(lmfin$residuals ~ z$Cards, main='Residuals versus Number of Cards', xlab = 'Cards', ylab = 'Residuals')
+abline(h = 0, col = 2)
+
+par(mfg=c(2,2))
+plot(lmfin$residuals ~ z$Age, main='Residuals versus Age', xlab = 'Age', ylab = 'Residuals')
+abline(h = 0, col = 2)
+```
+
+3. Residuals vs Fitted shows assumption of constant variance/homoskedasticity is preserved
+```{r}
+ggplot(z, aes(x=lmfin$fitted.values, y=lmfin$residuals)) + geom_point() +
+  geom_hline(aes(yintercept = 0)) + labs(x = "FittedValuesRegfinal", y= "ResidualsRegfinal")
+```
+
+4. Normality assumption, error terms are normally distributed as shown by most points
+being on the normal probability line, some discrepancy in the tail
+```{r}
+ggplot(z, aes(sample=lmfin$residual)) + stat_qq() + stat_qqline()
+```
+
+Plotting the Interaction term graph - to reveal necessity of Interaction term, plot shows no need for interaction term, no cross effect in either Interaction case.
+```{r}
+lmint1 <- lm(Balance~Income+Limit+Student+Cards + Age + Student*Limit, data=z)
+lmint2 <- lm(Balance~Income+Limit+Student+Cards + Age + Student*Income, data=z)
+```
+
+```{r}
+Intterm1 <- effect('Limit*Student', lmint1, se=TRUE)
+plot(Intterm1, multiline = TRUE)
+
+Intterm2 <- effect('Income*Student', lmint2, se=TRUE)
+plot(Intterm2, multiline = TRUE)
+
+```
+
+
+Some more inference as before - we perform and obtain the confidence interval for the 5 predictor model, the F-test to see if variances are equal or not for the Student category, a two-sample t-test that reveals a difference in mean of Balances for the Student category, and finally a regular F-test to compare the model against an intercept only model, with a low p-value our model holds. 
+```{r}
+confint(lmfin)
+var.test(Balance~Student, data=z)
+t.test(Balance~Student, data=z, alternative = "two.sided", var.equal = FALSE)
+lminton <- lm(Balance~1, data=z)
+anova(lmfin, lminton)
+```
+
